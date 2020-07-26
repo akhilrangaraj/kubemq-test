@@ -11,3 +11,5 @@ libraryDependencies += "io.kubemq.sdk" % "kubemq-sdk-Java" % "1.0.3"
 // https://mvnrepository.com/artifact/commons-cli/commons-cli
 libraryDependencies += "commons-cli" % "commons-cli" % "1.4"
 
+assemblyJarName in assembly := "kubemq-test.jar"
+
