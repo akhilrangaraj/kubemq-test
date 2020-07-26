@@ -12,9 +12,7 @@ import collection.JavaConverters._
 import scala.concurrent.duration.Duration
 import scala.io.Source
 import scala.util.Random
-class Consumer {
 
-}
 object Consumer {
 
   val defaultHost = "127.0.0.1"
