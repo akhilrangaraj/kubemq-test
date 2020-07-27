@@ -11,7 +11,7 @@ import scala.concurrent.duration.Duration
 import scala.io.Source
 import scala.util.Random
 
-class Producer(ec: ExecutionContext, threads: Int, host: String, messages: Int, file: Option[String], queueName: String) {
+class Producer(ec: ExecutionContext, threads: Int, host: String, messages: Int, file: Option[String], queueName: String, timeout: Int) {
   def generateMessages(count: Int) : List[String] = {
     val r = Random
     val sentences = for (i <- 0 to count) yield {
@@ -25,19 +25,22 @@ class Producer(ec: ExecutionContext, threads: Int, host: String, messages: Int, 
   def produce(id: Int) : Unit = {
     println(s"${id}: Working on sending messages")
     val lines = if (file.isDefined) Source.fromFile(file.get).getLines().toList else generateMessages(messages)
-    val nanos = System.nanoTime()
 
     try {
 
       val queue = new Queue(queueName, s"Producer-$id", host)
+
+      val nanos = System.nanoTime()
+
       for (i <- 0 to messages) {
-        val resSend = queue.SendQueueMessage(new Message().setBody(Converter.ToByteArray(lines(i))).setMetadata(s"Sequence $id-$i").setExpiration(10))
+        val resSend = queue.SendQueueMessage(new Message().setBody(Converter.ToByteArray(lines(i))).setMetadata(s"Sequence $id-$i").setExpiration(timeout))
         if (resSend.getIsError) println(s"$id: Message enqueue error, error: ${resSend.getError}") else println(s"$id: Sent message $i")
       }
+      println(s"${id}: Completed $messages in ${(System.nanoTime()-nanos)/1000000f}ms")
+
     } catch {
       case e: Exception => println(s"$id: ${e.getMessage}")
     }
-    println(s"${id}: Completed $messages in ${(System.nanoTime()-nanos)/1000000f}ms")
   }
 
   def run() : Unit = {
@@ -59,12 +62,14 @@ object Producer {
   val defaultMessages = 10
   val defaultFile = None
   val defaultQueueName = "produce"
+  val defaultExpiration = 3600
   def main(args: Array[String]) = {
     val options = new Options()
     options.addOption("H", true, "Host of kubemq cluster")
     options.addOption("t",  true,"Worker thread")
     options.addOption("c", true,"messages to send per worker")
     options.addOption("f", true,"message file, newline delimited")
+    options.addOption("e", true, "expiration time in seconds")
     options.addOption("q", true, "queueName")
     options.addOption("h", "Help")
     val parsedArgs = new DefaultParser().parse(options, args)
@@ -75,13 +80,13 @@ object Producer {
     }
 
     val host = if(parsedArgs.hasOption("H"))  parsedArgs.getOptionValue("H") else defaultHost
-    println(s"Host: $host")
     val threads = if (parsedArgs.hasOption("t")) parsedArgs.getOptionValue("t").toInt else defaultThreads
     val messages = if (parsedArgs.hasOption("c")) parsedArgs.getOptionValue("c").toInt else defaultMessages
     val file = if (parsedArgs.hasOption("f")) Some(parsedArgs.getOptionValue("f")) else defaultFile
     val ec = ExecutionContext.fromExecutor(Executors.newFixedThreadPool(threads))
     val queue = if(parsedArgs.hasOption("q")) parsedArgs.getOptionValue("q") else defaultQueueName
-    val producer = new Producer(ec, threads, host, messages, file, queue)
+    val timeout = if(parsedArgs.hasOption("e")) parsedArgs.getOptionValue("e").toInt else defaultExpiration
+    val producer = new Producer(ec, threads, host, messages, file, queue, timeout)
     producer.run()
     System.exit(0)
 
